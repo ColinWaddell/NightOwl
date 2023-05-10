@@ -1,0 +1,31 @@
+---
+BasedOnStyle: WebKit  
+IndentWidth: 4
+ColumnLimit: 100
+AlignTrailingComments: true
+SpacesBeforeTrailingComments: 2
+BreakBeforeBraces: Custom
+BraceWrapping:
+    AfterFunction: false
+    BeforeElse: true
+AlignAfterOpenBracket: BlockIndent 
+IndentCaseLabels: true
+PointerAlignment: Right
+AllowAllParametersOfDeclarationOnNextLine: true
+BinPackParameters: false
+BreakBeforeTernaryOperators: true
+AllowShortFunctionsOnASingleLine: false
+KeepEmptyLinesAtTheStartOfBlocks: false
+ReflowComments: false
+SpaceAfterCStyleCast: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+AlignOperands: true
+AlignTrailingComments: true
+AlignEscapedNewlines: true
+BinPackArguments: false
+Cpp11BracedListStyle: false
+ColumnLimit: 0
+---
+
