@@ -150,6 +150,7 @@ void loop() {
             from
         );
 
+        /* Blink the lamp when the first packet is received */
         if (!first_packet_received) {
             flash_lamp();
             first_packet_received = true;
@@ -162,6 +163,7 @@ void loop() {
             }
         }
 
+        /* Switch light based on threshold logic */
         if (enable_light) {
             relay_open();
             Serial.printf("Relay OPENED\n");
@@ -169,9 +171,6 @@ void loop() {
         else {
             relay_close();
             Serial.printf("Relay CLOSED\n");
-        }
-
-        if (!first_packet_received) {
         }
     }
 }
