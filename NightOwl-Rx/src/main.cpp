@@ -75,6 +75,7 @@ void radio_init() {
 #define RELAY_SET 11
 #define RELAY_UNSET 10
 #define RELAY_HOLD_MS 10
+#define LAMP_FLASHES 2
 
 void relay_open() {
     digitalWrite(RELAY_SET, HIGH);
@@ -92,6 +93,17 @@ void relay_init() {
     pinMode(RELAY_SET, OUTPUT);
     pinMode(RELAY_UNSET, OUTPUT);
     relay_close();
+}
+
+void flash_lamp() {
+    uint8_t i = 0;
+
+    for (i = 0; i < LAMP_FLASHES; i++) {
+        relay_open();
+        delay(500);
+        relay_close();
+        delay(500);
+    }
 }
 
 /**********************************************************
@@ -122,6 +134,7 @@ void loop() {
     uint8_t len = sizeof(rf_packet);
     uint8_t from;
     bool enable_light = false;
+    static bool first_packet_received = false;
 
     delay(1000);  // Wait 1 second between loops, could also 'sleep' here!
 
@@ -137,6 +150,11 @@ void loop() {
             from
         );
 
+        if (!first_packet_received) {
+            flash_lamp();
+            first_packet_received = true;
+        }
+
         /* Lighting Logic */
         if (packet.luminance < LUMINANCE_THRESHOLD) {
             if (packet.door_open_seconds > 0 && packet.door_open_seconds < DOOR_OPEN_TIMEOUT) {
@@ -151,6 +169,9 @@ void loop() {
         else {
             relay_close();
             Serial.printf("Relay CLOSED\n");
+        }
+
+        if (!first_packet_received) {
         }
     }
 }
