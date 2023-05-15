@@ -25,10 +25,9 @@ void resetAlarm(void) {
 }
 
 void blink_led() {
-    static bool blink_high = false;
-
-    digitalWrite(LED_BUILTIN, blink_high ? LOW : HIGH);
-    blink_high ^= 0x01;
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(10);
+    digitalWrite(LED_BUILTIN, LOW);
 }
 
 /**********************************************************
@@ -43,7 +42,7 @@ void blink_led() {
 #define RFM95_INT 3
 
 #define RF95_FREQ 915.0
-#define RF95_TX_PWR 20 /* 5dBm to 23dBm */
+#define RF95_TX_PWR 5 /* 5dBm to 23dBm */
 #define RF95_NODE_ADDRESS 0
 
 /* Singleton instance of the radio driver */
@@ -149,11 +148,11 @@ void setup() {
 /**********************************************************
  * Sleep thresholds
  *********************************************************/
-#define TX_DOOR_STEADYSTATE_PERIOD 10 /* Seconds */
+#define TX_DOOR_STEADYSTATE_PERIOD 30 /* Seconds */
 
 /* Transmit N second to signal change of state
  * Repeating transactions ensures it's received */
-#define TX_DOOR_CHANGE_STATE_REPEATS 3 
+#define TX_DOOR_CHANGE_STATE_REPEATS 2
 
 /**********************************************************
  * Super-loop
@@ -190,12 +189,12 @@ void loop() {
      * to ensure that the Rx unit is updated we send updates
      * for the next TX_DOOR_CHANGE_STATE_REPEATS seconds */
 
-    if (door_open_previously != door_open){
+    if (door_open_previously != door_open) {
         repeat_tx = TX_DOOR_CHANGE_STATE_REPEATS;
     }
 
     if (
-        first_loop || repeat_tx || time_since_tx >= TX_DOOR_STEADYSTATE_PERIOD 
+        first_loop || repeat_tx || time_since_tx >= TX_DOOR_STEADYSTATE_PERIOD
     ) {
         /* Only read ADC if we're transmitting */
         luminance = luminance_read();
@@ -206,7 +205,7 @@ void loop() {
             .packet_number = packet_n,
             .luminance = luminance,
             .door_open_seconds = door_open_seconds,
-            .battery_voltage = analogRead(VBATPIN)
+            .battery_voltage = (uint16_t)analogRead(VBATPIN)
         };
 
         if (manager.sendtoWait((uint8_t *)&packet, sizeof(packet), RH_BROADCAST_ADDRESS)) {
@@ -216,7 +215,7 @@ void loop() {
 
             /* If we're repeating transactions
              * then decrement the counter */
-            if (repeat_tx){
+            if (repeat_tx) {
                 repeat_tx--;
             }
         }
@@ -245,11 +244,11 @@ void loop() {
     resetAlarm();
     Serial.end();
 #if REQUIRE_USB
-    USBDevice.detach();     /* Safely detach the USB prior to sleeping */
+    USBDevice.detach();    /* Safely detach the USB prior to sleeping */
 #endif
-    zerortc.standbyMode();  /* Sleep until next alarm match */
+    zerortc.standbyMode(); /* Sleep until next alarm match */
 #if REQUIRE_USB
-    USBDevice.attach();     /* Re-attach the USB */
+    USBDevice.attach();    /* Re-attach the USB */
 #endif
 
 #else /* Regular delay */
