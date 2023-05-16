@@ -110,7 +110,7 @@ void flash_lamp() {
  * Switching Thresholds
  *********************************************************/
 #define LUMINANCE_THRESHOLD 20
-#define DOOR_OPEN_TIMEOUT 65535
+#define DOOR_OPEN_TIMEOUT 60
 
 /**********************************************************
  * Board setup
@@ -124,6 +124,9 @@ void setup() {
 
     radio_init();
     relay_init();
+
+    /* Indicate we're running */
+    flash_lamp();
 }
 
 /**********************************************************
@@ -135,8 +138,6 @@ void loop() {
     uint8_t from;
     bool enable_light = false;
     static bool first_packet_received = false;
-
-    delay(1000);  // Wait 1 second between loops, could also 'sleep' here!
 
     /* Toggle light on each loop*/
     blink_led();
@@ -173,4 +174,7 @@ void loop() {
             Serial.printf("Relay CLOSED\n");
         }
     }
+
+    /* 1 second between loops */
+    delay(1000);
 }
