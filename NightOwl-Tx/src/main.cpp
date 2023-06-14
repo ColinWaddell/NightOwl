@@ -11,16 +11,23 @@
 
 RTCZero zerortc;
 
-/* Set the wake-up period */
-const uint8_t wakeup_seconds = 1;
-const uint8_t wakeup_minutes = 0;
-const uint8_t wakeup_hours = 0;
+/* Set the wake-up period
+ * If LOW_POWER_SLEEP is disabled then
+ * only set a delay of a couple of seconds
+ * */
+#define WAKEUP_SECONDS 3
+#define WAKEUP_MINUTES 0
+#define WAKEUP_HOURS 0
+
+#define WAKEUP_MILLI_SECONDS (                                                      \
+    WAKEUP_SECONDS * 1000 + WAKEUP_MINUTES * 60 * 1000 + WAKEUP_HOURS * 3600 * 1000 \
+)
 
 void resetAlarm(void) {
     zerortc.setTime(0, 0, 0);
     zerortc.setDate(1, 1, 1);
 
-    zerortc.setAlarmTime(wakeup_hours, wakeup_minutes, wakeup_seconds);
+    zerortc.setAlarmTime(WAKEUP_HOURS, WAKEUP_MINUTES, WAKEUP_SECONDS);
     zerortc.enableAlarm(zerortc.MATCH_HHMMSS);
 }
 
@@ -28,6 +35,7 @@ void blink_led() {
     digitalWrite(LED_BUILTIN, HIGH);
     delay(10);
     digitalWrite(LED_BUILTIN, LOW);
+    delay(10);
 }
 
 /**********************************************************
@@ -51,10 +59,7 @@ RHReliableDatagram manager(rf95, RF95_NODE_ADDRESS);
 
 /* Radio Packet */
 typedef struct __attribute__((__packed__)) _rf_packet {
-    uint16_t packet_number;
-    uint16_t luminance;
-    uint16_t door_open_seconds;
-    uint16_t battery_voltage;
+    bool door_open;
 } rf_packet;
 
 void radio_init() {
@@ -146,13 +151,9 @@ void setup() {
 }
 
 /**********************************************************
- * Sleep thresholds
+ * Switching Thresholds
  *********************************************************/
-#define TX_DOOR_STEADYSTATE_PERIOD 30 /* Seconds */
-
-/* Transmit N second to signal change of state
- * Repeating transactions ensures it's received */
-#define TX_DOOR_CHANGE_STATE_REPEATS 2
+#define LUMINANCE_THRESHOLD 20
 
 /**********************************************************
  * Super-loop
@@ -160,78 +161,39 @@ void setup() {
 void loop() {
     static bool first_loop = true;
     static bool door_open_previously = false;
-    static uint16_t packet_n = 0;
-    static uint16_t door_open_seconds = 0;
-    static uint16_t time_since_tx = 0;
-    static uint8_t repeat_tx = 0;
+    bool perform_tx = false;
+    bool door_is_open = false;
 
-    uint16_t luminance = 0;
-    bool door_open = door_is_open();
-
-    /* Toggle light on each loop*/
     blink_led();
 
-    /* Acquire data */
-    if (door_open) {
-        /* Increment door seconds counter */
-        door_open_seconds++;
-        if (!door_open_seconds) {
-            /* Integer overflow handling */
-            door_open_seconds++;
+    if (!first_loop) {
+        /* Tx a packet if the door has changed state and
+         * there is enough light
+        */
+        door_is_open = door_is_open();
+        if (door_open_previously != door_is_open) {
+            if (luminance_read() < LUMINANCE_THRESHOLD) {
+                perform_tx = true;
+            }
         }
     }
     else {
-        door_open_seconds = 0;
+        /* Always Tx on boot */
+        perform_tx = true;
     }
 
-    /* Send a packet once every TX_DOOR_STEADYSTATE_PERIOD
-     * If a change of the door's state is noticed then 
-     * to ensure that the Rx unit is updated we send updates
-     * for the next TX_DOOR_CHANGE_STATE_REPEATS seconds */
-
-    if (door_open_previously != door_open) {
-        repeat_tx = TX_DOOR_CHANGE_STATE_REPEATS;
-    }
-
-    if (
-        first_loop || repeat_tx || time_since_tx >= TX_DOOR_STEADYSTATE_PERIOD
-    ) {
-        /* Only read ADC if we're transmitting */
-        luminance = luminance_read();
-
-        /* Build packet */
-        packet_n++;
+    /* Tx a packet if it's required */
+    if (perform_tx) {
         rf_packet packet = {
-            .packet_number = packet_n,
-            .luminance = luminance,
-            .door_open_seconds = door_open_seconds,
-            .battery_voltage = (uint16_t)analogRead(VBATPIN)
-        };
+            .door_open = door_is_open
+        }
 
         if (manager.sendtoWait((uint8_t *)&packet, sizeof(packet), RH_BROADCAST_ADDRESS)) {
-            /* If successfully sent then reset counter */
-            /* Reset as 1 as this is the expected value on the next loop */
-            time_since_tx = 1;
-
-            /* If we're repeating transactions
-             * then decrement the counter */
-            if (repeat_tx) {
-                repeat_tx--;
-            }
+            blink_led();
         }
         else {
             Serial.println("Broadcast failed");
         }
-
-        Serial.printf(
-            "[TX #%05d] Luminance = %04d, Door Open = %05d seconds\n",
-            packet_n,
-            luminance,
-            door_open_seconds
-        );
-    }
-    else {
-        time_since_tx++;
     }
 
     /* Tidy up operations */
@@ -252,6 +214,6 @@ void loop() {
 #endif
 
 #else /* Regular delay */
-    delay(1000);
+    delay(WAKEUP_MILLI_SECONDS);
 #endif
 }

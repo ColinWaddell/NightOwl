@@ -5,6 +5,11 @@
 #include <SPI.h>
 
 /**********************************************************
+ * Settings
+ *********************************************************/
+#define LIGHT_TIMEOUT 30
+
+/**********************************************************
  * Power Management
  *********************************************************/
 void blink_led() {
@@ -31,10 +36,7 @@ RHReliableDatagram manager(rf95, RF95_NODE_ADDRESS);
 
 /* Radio Packet */
 typedef struct __attribute__((__packed__)) _rf_packet {
-    uint16_t packet_number;
-    uint16_t luminance;
-    uint16_t door_open_seconds;
-    uint16_t battery_voltage;
+    bool door_open;
 } rf_packet;
 
 void radio_init() {
@@ -107,12 +109,6 @@ void flash_lamp() {
 }
 
 /**********************************************************
- * Switching Thresholds
- *********************************************************/
-#define LUMINANCE_THRESHOLD 20
-#define DOOR_OPEN_TIMEOUT 60
-
-/**********************************************************
  * Board setup
  *********************************************************/
 void setup() {
@@ -134,44 +130,31 @@ void setup() {
  *********************************************************/
 void loop() {
     rf_packet packet;
-    uint8_t len = sizeof(rf_packet);
+    uint8_t pkt_len = sizeof(rf_packet);
     uint8_t from;
-    bool enable_light = false;
-    static bool first_packet_received = false;
+    static uint16_t timeout_remaining = 0;
 
     /* Toggle light on each loop*/
     blink_led();
 
-    if (manager.recvfromAck((uint8_t *)&packet, &len, &from)) {
-        Serial.printf(
-            "[RX #%05d] Luminance = %04d, Door Open = %05d seconds, From: %d, ",
-            packet.packet_number,
-            packet.luminance,
-            packet.door_open_seconds,
-            from
-        );
+    if (manager.recvfromAck((uint8_t *)&packet, &pkt_len, &from)) {
+        Serial.printf("Door changed state: ");
 
-        /* Blink the lamp when the first packet is received */
-        if (!first_packet_received) {
-            flash_lamp();
-            first_packet_received = true;
-        }
-
-        /* Lighting Logic */
-        if (packet.luminance < LUMINANCE_THRESHOLD) {
-            if (packet.door_open_seconds > 0 && packet.door_open_seconds < DOOR_OPEN_TIMEOUT) {
-                enable_light = true;
-            }
-        }
-
-        /* Switch light based on threshold logic */
-        if (enable_light) {
+        if (packet.door_open) {
+            Serial.printf("OPEN\n");
             relay_open();
-            Serial.printf("Relay OPENED\n");
+            timeout_remaining = LIGHT_TIMEOUT;
         }
         else {
+            Serial.printf("CLOSED\n");
             relay_close();
-            Serial.printf("Relay CLOSED\n");
+        }
+    }
+
+    if (timeout_remaining) {
+        if (timeout_remaining == 1) {
+            Serial.printf("TIMEOUT\n");
+            relay_close();
         }
     }
 
