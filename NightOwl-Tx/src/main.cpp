@@ -5,6 +5,7 @@
  *********************************************************/
 #include <RTCZero.h>
 
+#define VERBOSE_DEBUG 0
 #define LOW_POWER_SLEEP 1
 #define REQUIRE_USB 0
 #define VBATPIN A7
@@ -35,7 +36,6 @@ void blink_led() {
     digitalWrite(LED_BUILTIN, HIGH);
     delay(10);
     digitalWrite(LED_BUILTIN, LOW);
-    delay(10);
 }
 
 /**********************************************************
@@ -50,7 +50,7 @@ void blink_led() {
 #define RFM95_INT 3
 
 #define RF95_FREQ 915.0
-#define RF95_TX_PWR 5 /* 5dBm to 23dBm */
+#define RF95_TX_PWR 10 /* 5dBm to 23dBm */
 #define RF95_NODE_ADDRESS 0
 
 /* Singleton instance of the radio driver */
@@ -153,7 +153,7 @@ void setup() {
 /**********************************************************
  * Switching Thresholds
  *********************************************************/
-#define LUMINANCE_THRESHOLD 20
+#define LUMINANCE_THRESHOLD 50
 
 /**********************************************************
  * Super-loop
@@ -162,16 +162,17 @@ void loop() {
     static bool first_loop = true;
     static bool door_open_previously = false;
     bool perform_tx = false;
-    bool door_is_open = false;
+    bool door_open = false;
 
     blink_led();
+
+    door_open = door_is_open();
 
     if (!first_loop) {
         /* Tx a packet if the door has changed state and
          * there is enough light
         */
-        door_is_open = door_is_open();
-        if (door_open_previously != door_is_open) {
+        if (door_open_previously != door_open) {
             if (luminance_read() < LUMINANCE_THRESHOLD) {
                 perform_tx = true;
             }
@@ -185,16 +186,21 @@ void loop() {
     /* Tx a packet if it's required */
     if (perform_tx) {
         rf_packet packet = {
-            .door_open = door_is_open
-        }
+            .door_open = door_open
+        };
 
         if (manager.sendtoWait((uint8_t *)&packet, sizeof(packet), RH_BROADCAST_ADDRESS)) {
+            delay(10); /* make the blink obvious in case we've just called it above */
             blink_led();
         }
         else {
             Serial.println("Broadcast failed");
         }
     }
+
+#if VERBOSE_DEBUG
+    Serial.printf("Door: %d, Luminance: %ld\n\r", door_open, luminance_read());
+#endif
 
     /* Tidy up operations */
     rf95.sleep();
