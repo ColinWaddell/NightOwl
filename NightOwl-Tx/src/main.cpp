@@ -199,7 +199,7 @@ void loop() {
     }
 
 #if VERBOSE_DEBUG
-    Serial.printf("Door: %d, Luminance: %ld\n\r", door_open, luminance_read());
+    Serial.printf("Door: %d, Luminance: %ld, Batter: %ld\n\r", door_open, luminance_read(), (uint16_t)analogRead(VBATPIN));
 #endif
 
     /* Tidy up operations */
