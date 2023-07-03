@@ -7,7 +7,7 @@
 /**********************************************************
  * Settings
  *********************************************************/
-#define LIGHT_TIMEOUT 30
+#define LIGHT_TIMEOUT_SECONDS 30
 
 /**********************************************************
  * Power Management
@@ -143,16 +143,18 @@ void loop() {
         if (packet.door_open) {
             Serial.printf("OPEN\n");
             relay_open();
-            timeout_remaining = LIGHT_TIMEOUT;
+            timeout_remaining = LIGHT_TIMEOUT_SECONDS;
         }
         else {
             Serial.printf("CLOSED\n");
             relay_close();
+            timeout_remaining = 0;
         }
     }
 
     if (timeout_remaining) {
-        if (timeout_remaining == 1) {
+        timeout_remaining--;
+        if (!timeout_remaining) {
             Serial.printf("TIMEOUT\n");
             relay_close();
         }
