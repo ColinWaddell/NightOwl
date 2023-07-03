@@ -38,6 +38,14 @@ void blink_led() {
     digitalWrite(LED_BUILTIN, LOW);
 }
 
+float battery_voltage(){
+    float measuredvbat = analogRead(VBATPIN);
+    measuredvbat *= 2;    // v-divider halfs voltage
+    measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
+    measuredvbat /= 1024; // convert to voltage
+    return measuredvbat;
+}
+
 /**********************************************************
  * Radio Config
  *********************************************************/
@@ -199,7 +207,8 @@ void loop() {
     }
 
 #if VERBOSE_DEBUG
-    Serial.printf("Door: %d, Luminance: %ld, Batter: %ld\n\r", door_open, luminance_read(), (uint16_t)analogRead(VBATPIN));
+    Serial.printf("Door: %d, Luminance: %ld, Battery: ", door_open, luminance_read());
+    Serial.println(battery_voltage());
 #endif
 
     /* Tidy up operations */
