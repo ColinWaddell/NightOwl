@@ -7,6 +7,7 @@
 
 #define VERBOSE_DEBUG 0
 #define LOW_POWER_SLEEP 1 /* USB and Serial disabled after initialisation when true */
+#define STATUS_BLINKS 1
 #define VBATPIN A7
 
 RTCZero zerortc;
@@ -47,11 +48,12 @@ void blink_led(blink_code status) {
         uint32_t duration;
         uint8_t blinks;
     } const bp[] = {
-        [BLINK_FIRST_LOOP] = {.duration=100, .blinks=1},
+        [BLINK_FIRST_LOOP] = {.duration=1000, .blinks=1},
         [BLINK_NOTHING_HAPPENED] = {.duration=10, .blinks=1},
-        [BLINK_DOOR_CHANGED] = {.duration=10, .blinks=2},
-        [BLINK_TX_SUCCESS] = {.duration=10, .blinks=4},
-        [BLINK_TX_FAILURE] = {.duration=5, .blinks=8},
+        [BLINK_DOOR_CHANGED] = {.duration=100, .blinks=2},
+        [BLINK_TX_SUCCESS] = {.duration=200, .blinks=4},
+        [BLINK_TX_FAILURE] = {.duration=200, .blinks=8},
+        [BLINK_CODES_ERROR] = {.duration=800, .blinks=8},
     };
 
     if (status > BLINK_CODES_ERROR){
@@ -213,11 +215,11 @@ void loop() {
                 perform_tx = true;
             }
         }
-         status = BLINK_FIRST_LOOP;
     }
     else {
         /* Always Tx on boot */
         perform_tx = true;
+        status = BLINK_FIRST_LOOP;
     }
 
     /* Tx a packet if it's required */
@@ -246,7 +248,11 @@ void loop() {
         }
     }
     
+#if STATUS_BLINKS
     blink_led(status);
+#else
+    blink_led(BLINK_NOTHING_HAPPENED);
+#endif
 
 #if VERBOSE_DEBUG
     Serial.printf("Door: %d, Luminance: %ld, Battery: ", door_open, luminance_read());
