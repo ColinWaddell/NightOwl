@@ -6,8 +6,7 @@
 #include <RTCZero.h>
 
 #define VERBOSE_DEBUG 0
-#define LOW_POWER_SLEEP 1
-#define REQUIRE_USB 0
+#define LOW_POWER_SLEEP 1 /* USB and Serial disabled after initialisation when true */
 #define VBATPIN A7
 
 RTCZero zerortc;
@@ -19,6 +18,16 @@ RTCZero zerortc;
 #define WAKEUP_SECONDS 3
 #define WAKEUP_MINUTES 0
 #define WAKEUP_HOURS 0
+
+/* Blinky status codes */
+typedef enum {
+    BLINK_FIRST_LOOP,
+    BLINK_NOTHING_HAPPENED,
+    BLINK_DOOR_CHANGED,
+    BLINK_TX_SUCCESS,
+    BLINK_TX_FAILURE,
+    BLINK_CODES_ERROR /* Must be last entry */
+} blink_code;
 
 #define WAKEUP_MILLI_SECONDS (                                                      \
     WAKEUP_SECONDS * 1000 + WAKEUP_MINUTES * 60 * 1000 + WAKEUP_HOURS * 3600 * 1000 \
@@ -32,10 +41,29 @@ void resetAlarm(void) {
     zerortc.enableAlarm(zerortc.MATCH_HHMMSS);
 }
 
-void blink_led() {
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(10);
-    digitalWrite(LED_BUILTIN, LOW);
+void blink_led(blink_code status) {
+
+    struct _blink_patterns {
+        uint32_t duration;
+        uint8_t blinks;
+    } const bp[] = {
+        [BLINK_FIRST_LOOP] = {.duration=100, .blinks=1},
+        [BLINK_NOTHING_HAPPENED] = {.duration=10, .blinks=1},
+        [BLINK_DOOR_CHANGED] = {.duration=10, .blinks=2},
+        [BLINK_TX_SUCCESS] = {.duration=10, .blinks=4},
+        [BLINK_TX_FAILURE] = {.duration=5, .blinks=8},
+    };
+
+    if (status > BLINK_CODES_ERROR){
+        status = BLINK_CODES_ERROR;
+    }
+
+    for (uint8_t i = 0; i < bp[status].blinks; i++){
+        digitalWrite(LED_BUILTIN, HIGH);
+        delay(bp[status].duration);
+        digitalWrite(LED_BUILTIN, LOW);
+        delay(bp[status].duration);
+    }
 }
 
 float battery_voltage(){
@@ -86,14 +114,16 @@ void radio_init() {
     while (!manager.init()) {
         /* Uncomment '#define SERIAL_DEBUG' in RH_RF95.cpp for detailed debug info */
         Serial.println("LoRa radio init failed");
-        while (1)
-            ;
+        while (1){
+            /* nop */
+        }
     }
 
     if (!rf95.setFrequency(RF95_FREQ)) {
         Serial.println("setFrequency failed");
-        while (1)
-            ;
+        while (1) {
+            /* nop */
+        }
     }
     Serial.print("Set Freq to: ");
     Serial.println(RF95_FREQ);
@@ -151,9 +181,7 @@ void setup() {
     delay(500);
     zerortc.begin();
     resetAlarm();
-#endif
-
-#if REQUIRE_USB == 0
+    Serial.end();
     USBDevice.detach();
 #endif
 }
@@ -171,8 +199,7 @@ void loop() {
     static bool door_open_previously = false;
     bool perform_tx = false;
     bool door_open = false;
-
-    blink_led();
+    blink_code status = BLINK_NOTHING_HAPPENED;
 
     door_open = door_is_open();
 
@@ -181,10 +208,12 @@ void loop() {
          * there is enough light
         */
         if (door_open_previously != door_open) {
+            status = BLINK_DOOR_CHANGED;
             if (luminance_read() < LUMINANCE_THRESHOLD) {
                 perform_tx = true;
             }
         }
+         status = BLINK_FIRST_LOOP;
     }
     else {
         /* Always Tx on boot */
@@ -197,14 +226,27 @@ void loop() {
             .door_open = door_open
         };
 
+#if 0
+        /* Makes no difference. Leaving in here for
+         * now in case I want to try a similar trick
+         */
+
+        /* Give the radio time to wake up */
+        rf95.setModeIdle();
+        delay(10);
+#endif 
         if (manager.sendtoWait((uint8_t *)&packet, sizeof(packet), RH_BROADCAST_ADDRESS)) {
-            delay(10); /* make the blink obvious in case we've just called it above */
-            blink_led();
+            status = BLINK_TX_SUCCESS;
         }
         else {
+            status = BLINK_TX_FAILURE;
+#if VERBOSE_DEBUG
             Serial.println("Broadcast failed");
+#endif
         }
     }
+    
+    blink_led(status);
 
 #if VERBOSE_DEBUG
     Serial.printf("Door: %d, Luminance: %ld, Battery: ", door_open, luminance_read());
@@ -219,16 +261,8 @@ void loop() {
     /* Sleep till next loop */
 #if LOW_POWER_SLEEP /* Put device to sleep */
     resetAlarm();
-    Serial.end();
-#if REQUIRE_USB
-    USBDevice.detach();    /* Safely detach the USB prior to sleeping */
-#endif
     zerortc.standbyMode(); /* Sleep until next alarm match */
-#if REQUIRE_USB
-    USBDevice.attach();    /* Re-attach the USB */
-#endif
-
 #else /* Regular delay */
     delay(WAKEUP_MILLI_SECONDS);
-#endif
+#endif /* LOW_POWER_SLEEP */
 }
