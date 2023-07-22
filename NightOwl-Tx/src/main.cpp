@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <assert.h>
 
 /**********************************************************
  * Watchdog Setup
@@ -33,7 +34,7 @@ struct _blink_patterns {
     uint32_t duration;
     uint8_t blinks;
 } const BLINKS[] = {
-    [BLINK_FIRST_LOOP] = { .duration = 1000, .blinks = 1 },
+    [BLINK_FIRST_LOOP] = { .duration = 500, .blinks = 1 },
     [BLINK_NOTHING_HAPPENED] = { .duration = 10, .blinks = 1 },
     [BLINK_DOOR_CHANGED] = { .duration = 100, .blinks = 2 },
     [BLINK_TX_SUCCESS] = { .duration = 200, .blinks = 4 },
@@ -47,14 +48,19 @@ void blink_led(blink_code status) {
     }
 
     for (uint8_t i = 0; i < BLINKS[status].blinks; i++) {
+        /* Very easy to accidentally overrun
+         * the WDT here so remember to give
+         * it a kick. Check the two aren't
+         * in conflict before blinking.
+         */
+        assert(BLINKS[status].duration < WDT_MS);
+
         digitalWrite(LED_BUILTIN, HIGH);
         delay(BLINKS[status].duration);
+        Watchdog.reset();
+
         digitalWrite(LED_BUILTIN, LOW);
         delay(BLINKS[status].duration);
-
-        /* Very easy to accidentally overrun
-         * the WDT here so give it a kick
-         */
         Watchdog.reset();
     }
 }
