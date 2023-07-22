@@ -1,26 +1,24 @@
 #include <Arduino.h>
 
 /**********************************************************
- * Power Management
+ * Watchdog Setup
  *********************************************************/
-#include <RTCZero.h>
+#include <Adafruit_SleepyDog.h>
 
+#define WDT_MS 1000
+
+/**********************************************************
+ * General Config
+ *********************************************************/
 #define VERBOSE_DEBUG 0
 #define LOW_POWER_SLEEP 1 /* USB and Serial disabled after initialisation when true */
-#define STATUS_BLINKS 1
+#define STATUS_BLINKS 1   /* Different patterns to show status. When false BLINK_NOTHING_HAPPENED used */
 #define VBATPIN A7
+#define SLEEP_MS 3000
 
-RTCZero zerortc;
-
-/* Set the wake-up period
- * If LOW_POWER_SLEEP is disabled then
- * only set a delay of a couple of seconds
- * */
-#define WAKEUP_SECONDS 3
-#define WAKEUP_MINUTES 0
-#define WAKEUP_HOURS 0
-
-/* Blinky status codes */
+/**********************************************************
+ * Status Blinks
+ *********************************************************/
 typedef enum {
     BLINK_FIRST_LOOP,
     BLINK_NOTHING_HAPPENED,
@@ -30,49 +28,42 @@ typedef enum {
     BLINK_CODES_ERROR /* Must be last entry */
 } blink_code;
 
-#define WAKEUP_MILLI_SECONDS (                                                      \
-    WAKEUP_SECONDS * 1000 + WAKEUP_MINUTES * 60 * 1000 + WAKEUP_HOURS * 3600 * 1000 \
-)
-
-void resetAlarm(void) {
-    zerortc.setTime(0, 0, 0);
-    zerortc.setDate(1, 1, 1);
-
-    zerortc.setAlarmTime(WAKEUP_HOURS, WAKEUP_MINUTES, WAKEUP_SECONDS);
-    zerortc.enableAlarm(zerortc.MATCH_HHMMSS);
-}
+/* Table of blink status codes versus patterns*/
+struct _blink_patterns {
+    uint32_t duration;
+    uint8_t blinks;
+} const BLINKS[] = {
+    [BLINK_FIRST_LOOP] = { .duration = 1000, .blinks = 1 },
+    [BLINK_NOTHING_HAPPENED] = { .duration = 10, .blinks = 1 },
+    [BLINK_DOOR_CHANGED] = { .duration = 100, .blinks = 2 },
+    [BLINK_TX_SUCCESS] = { .duration = 200, .blinks = 4 },
+    [BLINK_TX_FAILURE] = { .duration = 200, .blinks = 8 },
+    [BLINK_CODES_ERROR] = { .duration = 800, .blinks = 8 },
+};
 
 void blink_led(blink_code status) {
-
-    struct _blink_patterns {
-        uint32_t duration;
-        uint8_t blinks;
-    } const bp[] = {
-        [BLINK_FIRST_LOOP] = {.duration=1000, .blinks=1},
-        [BLINK_NOTHING_HAPPENED] = {.duration=10, .blinks=1},
-        [BLINK_DOOR_CHANGED] = {.duration=100, .blinks=2},
-        [BLINK_TX_SUCCESS] = {.duration=200, .blinks=4},
-        [BLINK_TX_FAILURE] = {.duration=200, .blinks=8},
-        [BLINK_CODES_ERROR] = {.duration=800, .blinks=8},
-    };
-
-    if (status > BLINK_CODES_ERROR){
+    if (status > BLINK_CODES_ERROR) {
         status = BLINK_CODES_ERROR;
     }
 
-    for (uint8_t i = 0; i < bp[status].blinks; i++){
+    for (uint8_t i = 0; i < BLINKS[status].blinks; i++) {
         digitalWrite(LED_BUILTIN, HIGH);
-        delay(bp[status].duration);
+        delay(BLINKS[status].duration);
         digitalWrite(LED_BUILTIN, LOW);
-        delay(bp[status].duration);
+        delay(BLINKS[status].duration);
+
+        /* Very easy to accidentally overrun
+         * the WDT here so give it a kick
+         */
+        Watchdog.reset();
     }
 }
 
-float battery_voltage(){
+float battery_voltage() {
     float measuredvbat = analogRead(VBATPIN);
-    measuredvbat *= 2;    // v-divider halfs voltage
-    measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
-    measuredvbat /= 1024; // convert to voltage
+    measuredvbat *= 2;    /* v-divider halfs voltage */
+    measuredvbat *= 3.3;  /* Multiply by 3.3V, our reference voltage */
+    measuredvbat /= 1024; /* convert to voltage */
     return measuredvbat;
 }
 
@@ -116,7 +107,7 @@ void radio_init() {
     while (!manager.init()) {
         /* Uncomment '#define SERIAL_DEBUG' in RH_RF95.cpp for detailed debug info */
         Serial.println("LoRa radio init failed");
-        while (1){
+        while (1) {
             /* nop */
         }
     }
@@ -169,6 +160,9 @@ uint16_t luminance_read() {
  * Board Setup
  *********************************************************/
 void setup() {
+    /* Enable Watchdog */
+    (void)Watchdog.enable(WDT_MS);
+
     /* Debug output */
     Serial.begin(115200);
 
@@ -180,9 +174,6 @@ void setup() {
 
     /* Power management */
 #if LOW_POWER_SLEEP
-    delay(500);
-    zerortc.begin();
-    resetAlarm();
     Serial.end();
     USBDevice.detach();
 #endif
@@ -236,7 +227,7 @@ void loop() {
         /* Give the radio time to wake up */
         rf95.setModeIdle();
         delay(10);
-#endif 
+#endif
         if (manager.sendtoWait((uint8_t *)&packet, sizeof(packet), RH_BROADCAST_ADDRESS)) {
             status = BLINK_TX_SUCCESS;
         }
@@ -247,7 +238,7 @@ void loop() {
 #endif
         }
     }
-    
+
 #if STATUS_BLINKS
     blink_led(status);
 #else
@@ -266,9 +257,15 @@ void loop() {
 
     /* Sleep till next loop */
 #if LOW_POWER_SLEEP /* Put device to sleep */
-    resetAlarm();
-    zerortc.standbyMode(); /* Sleep until next alarm match */
-#else /* Regular delay */
-    delay(WAKEUP_MILLI_SECONDS);
+    Watchdog.sleep(SLEEP_MS);
+#else  /* Regular delay */
+    delay(SLEEP_MS);
 #endif /* LOW_POWER_SLEEP */
+
+    /* WDT Kick */
+    Watchdog.reset();
+    Watchdog.enable(WDT_MS); // todo: test if I need to re-enable here.
+                             // I've a suspicion that using the sleep 
+                             // function will leave the WDT in the wrong
+                             // setup for it's expected functionality
 }
