@@ -47,21 +47,25 @@ void blink_led(blink_code status) {
         status = BLINK_CODES_ERROR;
     }
 
+    /* Very easy to accidentally overrun
+     * the WDT here so remember to give
+     * it a kick. Check the two aren't
+     * in conflict before blinking.
+     */
+    assert(BLINKS[status].duration < WDT_MS);
+
     for (uint8_t i = 0; i < BLINKS[status].blinks; i++) {
-        /* Very easy to accidentally overrun
-         * the WDT here so remember to give
-         * it a kick. Check the two aren't
-         * in conflict before blinking.
-         */
-        assert(BLINKS[status].duration < WDT_MS);
+        bool last_loop = (i == (BLINKS[status].blinks - 1));
 
         digitalWrite(LED_BUILTIN, HIGH);
         delay(BLINKS[status].duration);
         Watchdog.reset();
 
         digitalWrite(LED_BUILTIN, LOW);
-        delay(BLINKS[status].duration);
-        Watchdog.reset();
+        if (!last_loop) {
+            delay(BLINKS[status].duration);
+            Watchdog.reset();
+        }
     }
 }
 
