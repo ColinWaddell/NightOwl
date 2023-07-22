@@ -6,7 +6,7 @@
  *********************************************************/
 #include <Adafruit_SleepyDog.h>
 
-#define WDT_MS 1000
+#define WDT_MS 2000
 
 /**********************************************************
  * General Config
@@ -66,11 +66,14 @@ void blink_led(blink_code status) {
 }
 
 float battery_voltage() {
-    float measuredvbat = analogRead(VBATPIN);
-    measuredvbat *= 2;    /* v-divider halfs voltage */
-    measuredvbat *= 3.3;  /* Multiply by 3.3V, our reference voltage */
-    measuredvbat /= 1024; /* convert to voltage */
-    return measuredvbat;
+    float bat_v;
+
+    bat_v = analogRead(VBATPIN);
+    bat_v *= 2;    /* v-divider halfs voltage */
+    bat_v *= 3.3;  /* Multiply by 3.3V, our reference voltage */
+    bat_v /= 1024; /* convert to voltage */
+
+    return bat_v;
 }
 
 /**********************************************************
@@ -270,8 +273,8 @@ void loop() {
 
     /* WDT Kick */
     Watchdog.reset();
-    Watchdog.enable(WDT_MS); // todo: test if I need to re-enable here.
-                             // I've a suspicion that using the sleep 
-                             // function will leave the WDT in the wrong
-                             // setup for it's expected functionality
+    Watchdog.enable(WDT_MS);  // todo: test if I need to re-enable here.
+                              // I've a suspicion that using the sleep
+                              // function will leave the WDT in the wrong
+                              // setup for it's expected functionality
 }
