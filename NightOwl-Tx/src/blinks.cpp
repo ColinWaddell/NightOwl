@@ -21,6 +21,11 @@ struct _blink_patterns {
     [BLINK_CODES_ERROR] = { .duration = 800, .blinks = 8 },
 };
 
+void blink_init() {
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, LOW);
+}
+
 void blink_led(blink_code status) {
     if (status > BLINK_CODES_ERROR) {
         status = BLINK_CODES_ERROR;

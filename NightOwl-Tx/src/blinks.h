@@ -10,6 +10,7 @@ typedef enum {
     BLINK_CODES_ERROR /* Must be last entry */
 } blink_code;
 
+void blink_init();
 void blink_led(blink_code status);
 
 #endif

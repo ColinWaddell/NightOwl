@@ -1,58 +1,14 @@
+#include <Adafruit_SleepyDog.h>
 #include <Arduino.h>
+
 #include <assert.h>
 
+#include "battery.h"
 #include "blinks.h"
 #include "config.h"
+#include "door.h"
+#include "luminance.h"
 #include "radio.h"
-
-#include <Adafruit_SleepyDog.h>
-
-float battery_voltage() {
-    float bat_v;
-
-    bat_v = analogRead(VBATPIN);
-    bat_v *= 2;    /* v-divider halfs voltage */
-    bat_v *= 3.3;  /* Multiply by 3.3V, our reference voltage */
-    bat_v /= 1024; /* convert to voltage */
-
-    return bat_v;
-}
-
-/**********************************************************
- * Radio Config
- *********************************************************/
-
-/**********************************************************
- * Door Detection
- *********************************************************/
-#define DOOR_PIN 12
-
-volatile bool _door_open = false;
-
-void door_changed_ISR() {
-    noInterrupts();
-    _door_open = digitalRead(DOOR_PIN);
-    interrupts();
-}
-
-void door_init() {
-    pinMode(DOOR_PIN, INPUT_PULLUP);
-    _door_open = digitalRead(DOOR_PIN);
-    attachInterrupt(digitalPinToInterrupt(DOOR_PIN), door_changed_ISR, CHANGE);
-}
-
-bool door_is_open() {
-    return _door_open;
-}
-
-/**********************************************************
- * Luminance Config
- *********************************************************/
-#define LUMINANCE_AIN 3
-
-uint16_t luminance_read() {
-    return 1023 - analogRead(LUMINANCE_AIN);
-}
 
 /**********************************************************
  * Board Setup
@@ -64,10 +20,8 @@ void setup() {
     /* Debug output */
     Serial.begin(115200);
 
-    /* Blinky light */
-    pinMode(LED_BUILTIN, OUTPUT);
-    digitalWrite(LED_BUILTIN, LOW);
-
+    /* Initialise hardware */
+    blink_init();
     radio_init();
     door_init();
 
