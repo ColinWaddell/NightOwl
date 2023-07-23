@@ -1,8 +1,6 @@
 #include <Adafruit_SleepyDog.h>
 #include <Arduino.h>
 
-#include <assert.h>
-
 #include "battery.h"
 #include "blinks.h"
 #include "config.h"

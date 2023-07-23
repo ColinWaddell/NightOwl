@@ -5,12 +5,26 @@
  * General Config
  *********************************************************/
 #define VERBOSE_DEBUG 0
-#define LOW_POWER_SLEEP 1 /* USB and Serial disabled after initialisation when true */
-#define STATUS_BLINKS 1   /* Different patterns to show status. \
-                           *    0: Small single blink only      \
-                           *    1: Status codes blinked on led */
+#define WDT_MS 2000
+#define SLEEP_MS 3000
 
+/* USB and Serial disabled after initialisation when true */
+#define LOW_POWER_SLEEP 1
+
+/**********************************************************
+ * Battery
+ *********************************************************/
 #define VBATPIN A7
+
+/**********************************************************
+ * Status Blinks
+ *********************************************************/
+
+/* Different patterns to show status.
+ *    0: Small single blink only
+ *    1: Status codes blinked on led 
+ */
+#define STATUS_BLINKS 1
 
 /**********************************************************
  * Radio Config
@@ -32,16 +46,6 @@
  * Luminance Config
  *********************************************************/
 #define LUMINANCE_AIN 3
-
-/**********************************************************
- * App
- *********************************************************/
-#define SLEEP_MS 3000
 #define LUMINANCE_THRESHOLD 50
-
-/**********************************************************
- * Watchdog
- *********************************************************/
-#define WDT_MS 2000
 
 #endif
