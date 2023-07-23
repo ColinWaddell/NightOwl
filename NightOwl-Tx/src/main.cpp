@@ -1,77 +1,11 @@
 #include <Arduino.h>
 #include <assert.h>
 
-/**********************************************************
- * Watchdog Setup
- *********************************************************/
+#include "blinks.h"
+#include "config.h"
+#include "radio.h"
+
 #include <Adafruit_SleepyDog.h>
-
-#define WDT_MS 2000
-
-/**********************************************************
- * General Config
- *********************************************************/
-#define VERBOSE_DEBUG 0
-#define LOW_POWER_SLEEP 1 /* USB and Serial disabled after initialisation when true */
-#define STATUS_BLINKS 1   /* Different patterns to show status. \
-                           *    0: Small single blink only      \
-                           *    1: Status codes blinked on led */
-
-#define VBATPIN A7
-#define SLEEP_MS 3000
-#define LUMINANCE_THRESHOLD 50
-
-/**********************************************************
- * Status Blinks
- *********************************************************/
-typedef enum {
-    BLINK_FIRST_LOOP,
-    BLINK_NOTHING_HAPPENED,
-    BLINK_DOOR_CHANGED,
-    BLINK_TX_SUCCESS,
-    BLINK_TX_FAILURE,
-    BLINK_CODES_ERROR /* Must be last entry */
-} blink_code;
-
-/* Table of blink status codes versus patterns*/
-struct _blink_patterns {
-    uint32_t duration;
-    uint8_t blinks;
-} const BLINKS[] = {
-    [BLINK_FIRST_LOOP] = { .duration = 500, .blinks = 1 },
-    [BLINK_NOTHING_HAPPENED] = { .duration = 10, .blinks = 1 },
-    [BLINK_DOOR_CHANGED] = { .duration = 100, .blinks = 2 },
-    [BLINK_TX_SUCCESS] = { .duration = 200, .blinks = 4 },
-    [BLINK_TX_FAILURE] = { .duration = 200, .blinks = 8 },
-    [BLINK_CODES_ERROR] = { .duration = 800, .blinks = 8 },
-};
-
-void blink_led(blink_code status) {
-    if (status > BLINK_CODES_ERROR) {
-        status = BLINK_CODES_ERROR;
-    }
-
-    /* Very easy to accidentally overrun
-     * the WDT here so remember to give
-     * it a kick. Check the two aren't
-     * in conflict before blinking.
-     */
-    assert(BLINKS[status].duration < WDT_MS);
-
-    for (uint8_t i = 0; i < BLINKS[status].blinks; i++) {
-        bool last_loop = (i == (BLINKS[status].blinks - 1));
-
-        digitalWrite(LED_BUILTIN, HIGH);
-        delay(BLINKS[status].duration);
-        Watchdog.reset();
-
-        digitalWrite(LED_BUILTIN, LOW);
-        if (!last_loop) {
-            delay(BLINKS[status].duration);
-            Watchdog.reset();
-        }
-    }
-}
 
 float battery_voltage() {
     float bat_v;
@@ -87,59 +21,6 @@ float battery_voltage() {
 /**********************************************************
  * Radio Config
  *********************************************************/
-#include <RHReliableDatagram.h>
-#include <RH_RF95.h>
-#include <RadioHead.h>
-
-#define RFM95_CS 8
-#define RFM95_RST 4
-#define RFM95_INT 3
-
-#define RF95_FREQ 915.0
-#define RF95_TX_PWR 10 /* 5dBm to 23dBm */
-#define RF95_NODE_ADDRESS 0
-
-/* Singleton instance of the radio driver */
-RH_RF95 rf95(RFM95_CS, RFM95_INT);
-RHReliableDatagram manager(rf95, RF95_NODE_ADDRESS);
-
-/* Radio Packet */
-typedef struct __attribute__((__packed__)) _rf_packet {
-    bool door_open;
-} rf_packet;
-
-void radio_init() {
-    /* Radio Config */
-    pinMode(RFM95_RST, OUTPUT);
-    digitalWrite(RFM95_RST, HIGH);
-    delay(100);
-
-    /* Manual reset */
-    digitalWrite(RFM95_RST, LOW);
-    delay(10);
-    digitalWrite(RFM95_RST, HIGH);
-    delay(10);
-
-    /* while (!rf95.init()) { */
-    while (!manager.init()) {
-        /* Uncomment '#define SERIAL_DEBUG' in RH_RF95.cpp for detailed debug info */
-        Serial.println("LoRa radio init failed");
-        while (1) {
-            /* nop */
-        }
-    }
-
-    if (!rf95.setFrequency(RF95_FREQ)) {
-        Serial.println("setFrequency failed");
-        while (1) {
-            /* nop */
-        }
-    }
-    Serial.print("Set Freq to: ");
-    Serial.println(RF95_FREQ);
-
-    rf95.setTxPower(RF95_TX_PWR, false);
-}
 
 /**********************************************************
  * Door Detection
@@ -234,7 +115,7 @@ void loop() {
         };
 
         /* Transmit */
-        if (manager.sendtoWait((uint8_t *)&packet, sizeof(packet), RH_BROADCAST_ADDRESS)) {
+        if (radio_tx(&packet)) {
             status = BLINK_TX_SUCCESS;
         }
         else {
@@ -257,7 +138,7 @@ void loop() {
 #endif
 
     /* Tidy up operations */
-    rf95.sleep();
+    radio_sleep();
     first_loop = false;
     door_open_previously = door_open;
 
