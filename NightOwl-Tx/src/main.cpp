@@ -13,9 +13,13 @@
  *********************************************************/
 #define VERBOSE_DEBUG 0
 #define LOW_POWER_SLEEP 1 /* USB and Serial disabled after initialisation when true */
-#define STATUS_BLINKS 1   /* Different patterns to show status. When false BLINK_NOTHING_HAPPENED used */
+#define STATUS_BLINKS 1   /* Different patterns to show status. \
+                           *    0: Small single blink only      \
+                           *    1: Status codes blinked on led */
+
 #define VBATPIN A7
 #define SLEEP_MS 3000
+#define LUMINANCE_THRESHOLD 50
 
 /**********************************************************
  * Status Blinks
@@ -181,6 +185,7 @@ void setup() {
 
     /* Blinky light */
     pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, LOW);
 
     radio_init();
     door_init();
@@ -191,11 +196,6 @@ void setup() {
     USBDevice.detach();
 #endif
 }
-
-/**********************************************************
- * Switching Thresholds
- *********************************************************/
-#define LUMINANCE_THRESHOLD 50
 
 /**********************************************************
  * Super-loop
@@ -228,19 +228,12 @@ void loop() {
 
     /* Tx a packet if it's required */
     if (perform_tx) {
+        /* Build packet */
         rf_packet packet = {
             .door_open = door_open
         };
 
-#if 0
-        /* Makes no difference. Leaving in here for
-         * now in case I want to try a similar trick
-         */
-
-        /* Give the radio time to wake up */
-        rf95.setModeIdle();
-        delay(10);
-#endif
+        /* Transmit */
         if (manager.sendtoWait((uint8_t *)&packet, sizeof(packet), RH_BROADCAST_ADDRESS)) {
             status = BLINK_TX_SUCCESS;
         }
@@ -277,8 +270,5 @@ void loop() {
 
     /* WDT Kick */
     Watchdog.reset();
-    Watchdog.enable(WDT_MS);  // todo: test if I need to re-enable here.
-                              // I've a suspicion that using the sleep
-                              // function will leave the WDT in the wrong
-                              // setup for it's expected functionality
+    Watchdog.enable(WDT_MS); /* reenable required after sleep */
 }
